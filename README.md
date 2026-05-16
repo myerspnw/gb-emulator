@@ -4,7 +4,7 @@
 [![Lint](https://github.com/myerspnw/gb-emulator/actions/workflows/lint.yml/badge.svg)](https://github.com/myerspnw/gb-emulator/actions/workflows/lint.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-A cycle-accurate Game Boy (DMG) emulator written in modern C++23.
+An M-cycle-accurate Game Boy (DMG) emulator written in modern C++23.
 
 ## Status
 
@@ -12,27 +12,32 @@ A cycle-accurate Game Boy (DMG) emulator written in modern C++23.
 
 ## Building
 
-Requires a C++23 compiler (gcc 13+ or clang 16+), CMake 3.25+, and Ninja.
+Supported platforms: Linux and macOS. Windows is not currently supported
+— there's no CI lane and no documented build steps. SDL3 itself runs on
+Windows, so a port is plausible but unproven.
 
-On Ubuntu / Debian:
+Requires a C++23 compiler (gcc 13+ or clang 16+), CMake 3.25+, and Ninja.
+See [CONTRIBUTING.md](CONTRIBUTING.md#building) for the full per-platform
+dependency list (Linux apt packages, macOS brew formulae) and optional
+tooling (ccache, lld, clang-tidy, clang-format).
+
+Build and test (development):
 
 ```bash
-sudo apt install build-essential cmake ninja-build git pkg-config \
-    libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
-    libxinerama-dev libxss-dev libxkbcommon-dev libwayland-dev \
-    libdecor-0-dev libegl1-mesa-dev libgles2-mesa-dev \
-    libasound2-dev libpulse-dev libudev-dev libdbus-1-dev
+cmake --preset debug
+cmake --build --preset debug
+ctest --preset debug
 ```
 
-Build:
+Build for shipping:
 
 ```bash
 cmake --preset release
 cmake --build --preset release
-ctest --preset debug   # run tests (uses debug preset)
 ```
 
 Available presets: `debug`, `release`, `relwithdebinfo`, `asan`, `tsan`, `clang`.
+See [CONTRIBUTING.md](CONTRIBUTING.md#configure-and-build) for what each preset is for.
 
 ## Architecture
 

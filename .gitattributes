@@ -1,0 +1,11 @@
+# Game Boy ROMs and save data are binary. Without these rules git's
+# autocrlf or text-conversion heuristics can silently mangle the bytes,
+# which is very hard to notice (the ROMs look fine but fail to load).
+*.gb   binary
+*.gbc  binary
+*.bin  binary
+*.sav  binary
+
+# Save states use a custom binary format with a header magic — definitely
+# not text.
+*.gbe-state binary

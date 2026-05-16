@@ -23,9 +23,13 @@ if(CCACHE_PROGRAM)
     set(CMAKE_CXX_COMPILER_LAUNCHER ${CCACHE_PROGRAM})
 endif()
 
-# Use lld if available (much faster linking)
+# Use lld if available (much faster linking).
+# Skip on Apple platforms — AppleClang matches "Clang" as a regex
+# substring, and a brew-installed lld would silently replace Apple's
+# linker for everyone with `brew install llvm`. Anchored match keeps
+# Clang/GNU exact, NOT APPLE keeps Apple's linker as the macOS default.
 find_program(LLD_PROGRAM lld)
-if(LLD_PROGRAM AND CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+if(LLD_PROGRAM AND NOT APPLE AND CMAKE_CXX_COMPILER_ID MATCHES "^(Clang|GNU)$")
     add_link_options(-fuse-ld=lld)
 endif()
 

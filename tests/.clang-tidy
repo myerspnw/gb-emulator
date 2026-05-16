@@ -1,0 +1,18 @@
+---
+# Test code inherits the project's checks but disables a curated set of
+# rules that GoogleTest's macro-based style routinely trips. The intent
+# is to keep tests under clang-tidy without forcing test authors to
+# work around macros they didn't write.
+InheritParentConfig: true
+
+Checks: >
+  -bugprone-exception-escape,
+  -cert-err58-cpp,
+  -cppcoreguidelines-avoid-do-while,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-special-member-functions,
+  -cppcoreguidelines-pro-type-vararg,
+  -hicpp-special-member-functions,
+  -hicpp-vararg,
+  -readability-function-cognitive-complexity

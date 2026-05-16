@@ -202,8 +202,19 @@ public:
     // Takes ownership of the ROM bytes. The caller (typically the frontend
     // reading a file) gives up its buffer; the core moves it into the
     // cartridge object for the cartridge's lifetime.
-    std::expected<void, CartridgeError>
+    [[nodiscard]] std::expected<void, CartridgeError>
         load_cartridge(std::vector<std::byte> rom);
+
+    // Installs a wall-clock provider for the MBC3 RTC (the only place
+    // in the core where wall-clock time matters). The core never calls
+    // std::chrono::system_clock::now() itself — see "MBC3 RTC and
+    // wall-clock time" below for the design.
+    //
+    // Default provider returns 0s (RTC frozen at the Unix epoch), which
+    // is deterministic and right for tests. May be called before or
+    // after load_cartridge; takes effect on the next RTC latch.
+    using WallClockFn = std::function<std::chrono::seconds()>;
+    void set_wall_clock(WallClockFn fn);
 
     // ── Execution ─────────────────────────────────────────
     // Runs until the next VBlank, OR until a debug condition fires
@@ -216,7 +227,7 @@ public:
 
     // True if the last run_frame() exited because of a debug condition
     // rather than reaching VBlank.
-    bool stopped_at_breakpoint() const noexcept;
+    [[nodiscard]] bool stopped_at_breakpoint() const noexcept;
 
     // ── Input ─────────────────────────────────────────────
     void set_button(Button b, bool pressed);
@@ -224,32 +235,32 @@ public:
     // ── Output ────────────────────────────────────────────
     // Framebuffer is 160×144 bytes of palette indices (0-3). The frontend
     // converts indices to ARGB via its palette. See "Rendering" below.
-    std::span<const std::uint8_t> framebuffer() const noexcept;
+    [[nodiscard]] std::span<const std::uint8_t> framebuffer() const noexcept;
 
     // Drains the APU's sample buffer into the caller's span. Returns the
     // number of samples written. Caller-provided storage avoids exposing
     // internal buffers whose lifetime is unclear.
-    std::size_t drain_audio(std::span<float> out);
+    [[nodiscard]] std::size_t drain_audio(std::span<float> out);
 
     // ── Persistence ───────────────────────────────────────
     // Save state serialization uses a size-then-fill pattern. Caller
     // queries the required buffer size, allocates, then asks the core
     // to fill it. Avoids hidden allocations and matches the subsystem
     // serialization interface (see Cartridge below).
-    std::size_t save_state_size() const noexcept;
+    [[nodiscard]] std::size_t save_state_size() const noexcept;
     void serialize(std::span<std::byte> out) const;
 
-    std::expected<void, SaveStateError>
+    [[nodiscard]] std::expected<void, SaveStateError>
         deserialize(std::span<const std::byte> data);
 
-    std::span<const std::byte> cartridge_ram() const noexcept;
+    [[nodiscard]] std::span<const std::byte> cartridge_ram() const noexcept;
     void load_cartridge_ram(std::span<const std::byte> data);
 
     // ── Introspection (for debugger and tests) ────────────
-    const Cpu&   cpu()   const noexcept;
-    const Bus&   bus()   const noexcept;
-    const Ppu&   ppu()   const noexcept;
-    const Timer& timer() const noexcept;
+    [[nodiscard]] const Cpu&   cpu()   const noexcept;
+    [[nodiscard]] const Bus&   bus()   const noexcept;
+    [[nodiscard]] const Ppu&   ppu()   const noexcept;
+    [[nodiscard]] const Timer& timer() const noexcept;
 };
 ```
 
@@ -319,15 +330,15 @@ public:
     // read/write tick the bus by 4 T-cycles. They are non-const because
     // they advance time as a side effect — this is fundamental to M-cycle
     // accuracy. A "const read" would be lying about its effects.
-    uint8_t read(uint16_t addr);
-    void    write(uint16_t addr, uint8_t value);
-    void    tick(int t_cycles);
+    [[nodiscard]] uint8_t read(uint16_t addr);
+    void                 write(uint16_t addr, uint8_t value);
+    void                 tick(int t_cycles);
 
     // Debugger hooks: read/write without ticking. peek is const because
     // it truly has no side effects; poke is non-const (it mutates memory)
     // but distinct from write in that it doesn't advance time.
-    uint8_t peek(uint16_t addr) const noexcept;
-    void    poke(uint16_t addr, uint8_t value);
+    [[nodiscard]] uint8_t peek(uint16_t addr) const noexcept;
+    void                  poke(uint16_t addr, uint8_t value);
 
     void request_interrupt(InterruptType which);
 
@@ -344,7 +355,7 @@ Memory map (DMG):
 | `0x8000-0x9FFF` | VRAM            | PPU                    |
 | `0xA000-0xBFFF` | External RAM    | Cartridge (banked)     |
 | `0xC000-0xDFFF` | WRAM            | Bus                    |
-| `0xE000-0xFDFF` | Echo RAM        | Mirror of `0xC000-0xDDFF` |
+| `0xE000-0xFDFF` | Echo RAM        | Bus (mirrors WRAM `0xC000-0xDDFF`) |
 | `0xFE00-0xFE9F` | OAM             | PPU                    |
 | `0xFEA0-0xFEFF` | Unusable        | Bus (returns 0xFF)     |
 | `0xFF00-0xFF7F` | I/O registers   | Joypad/Timer/APU/PPU   |
@@ -462,22 +473,22 @@ class Cartridge {
 public:
     virtual ~Cartridge() = default;
 
-    virtual uint8_t read_rom(uint16_t addr) const = 0;
-    virtual void    write_rom(uint16_t addr, uint8_t value) = 0;
-    virtual uint8_t read_ram(uint16_t addr) const = 0;
-    virtual void    write_ram(uint16_t addr, uint8_t value) = 0;
+    [[nodiscard]] virtual uint8_t read_rom(uint16_t addr) const = 0;
+    virtual void                  write_rom(uint16_t addr, uint8_t value) = 0;
+    [[nodiscard]] virtual uint8_t read_ram(uint16_t addr) const = 0;
+    virtual void                  write_ram(uint16_t addr, uint8_t value) = 0;
 
-    virtual bool has_battery() const noexcept = 0;
-    virtual std::span<const std::byte> ram() const noexcept = 0;
+    [[nodiscard]] virtual bool has_battery() const noexcept = 0;
+    [[nodiscard]] virtual std::span<const std::byte> ram() const noexcept = 0;
     virtual void load_ram(std::span<const std::byte> data) = 0;
 
     // Save-state hooks. Each MBC type has its own State struct holding
     // bank registers, RAM enable flags, RTC state (MBC3), etc. The
     // serialized form is variable-length per MBC type; the size is
     // discoverable via state_size().
-    virtual std::size_t state_size() const noexcept = 0;
+    [[nodiscard]] virtual std::size_t state_size() const noexcept = 0;
     virtual void serialize(std::span<std::byte> out) const = 0;
-    virtual std::expected<void, SaveStateError>
+    [[nodiscard]] virtual std::expected<void, SaveStateError>
         deserialize(std::span<const std::byte> data) = 0;
 };
 ```
@@ -493,7 +504,7 @@ A factory function reads the cartridge header and returns the appropriate
 type:
 
 ```cpp
-std::expected<std::unique_ptr<Cartridge>, CartridgeError>
+[[nodiscard]] std::expected<std::unique_ptr<Cartridge>, CartridgeError>
 make_cartridge(std::vector<std::byte> rom);
 ```
 
@@ -594,11 +605,15 @@ point in time. Format:
 struct SaveStateHeader {
     char     magic[4];      // "GBE\0"
     uint32_t version;       // semantic version of the format
-    uint64_t timestamp;     // seconds since Unix epoch
     uint32_t cart_hash;     // CRC32 of the loaded ROM, for compatibility check
-    uint32_t reserved;
+    uint32_t reserved[3];   // pad to 24 bytes; reserved for future use
 };
 ```
+
+The header deliberately carries no timestamp. The save file's mtime is
+the canonical record of when it was written, and the core has no access
+to the system clock — threading a timestamp parameter through
+`serialize()` purely for metadata isn't worth the API surface.
 
 Following the header, each subsystem writes its `State` POD struct in
 a defined order. `GameBoy::serialize()` returns the concatenated bytes;
@@ -626,17 +641,66 @@ cartridge's `deserialize` returns `SaveStateError::CorruptCartridgeState`.
 
 Distinct from save states. Real Game Boy cartridges with batteries
 (MBC1/3/5 with RAM, where the header type byte indicates battery support)
-preserve their RAM across power cycles. We emulate this by:
+preserve their RAM across power cycles. We emulate this with two
+frontend-driven steps:
 
-- On `load_cartridge(rom)`: if the cart has battery + RAM, look for
-  `<rom-path>.sav` next to the ROM. If found, load it into the cart's
-  RAM. If not, leave RAM at default-init values.
-- On `GameBoy` destruction or explicit `save_cartridge_ram()` call:
-  if the cart has battery + RAM, write the RAM to `<rom-path>.sav`.
+- On startup: after `gameboy.load_cartridge(rom)` succeeds, the frontend
+  looks for `<rom-path>.sav` next to the ROM. If found, it reads the
+  bytes and calls `gameboy.load_cartridge_ram(data)`. If not, the cart's
+  RAM keeps its default-init values.
+- On shutdown (or whenever the frontend chooses to checkpoint): if the
+  cart has battery + RAM, the frontend reads `gameboy.cartridge_ram()`
+  and writes the bytes to `<rom-path>.sav`.
 
-The frontend is responsible for resolving the `.sav` path, not the core.
-The core exposes `cartridge_ram()` and `load_cartridge_ram(data)`; the
-frontend reads the file and passes the bytes in.
+The frontend is responsible for resolving the `.sav` path and for all
+file I/O. The core exposes `cartridge_ram()` and `load_cartridge_ram(data)`
+but has no notion of files and never writes to disk on its own.
+
+### MBC3 RTC and wall-clock time
+
+The MBC3 cartridge type includes a real-time clock chip. Its registers
+expose seconds, minutes, hours, and a 9-bit day counter, all advancing
+at 1 Hz from the cartridge's reference time. This is the only point in
+the emulation core where wall-clock time matters.
+
+The core must not call `std::chrono::system_clock::now()` itself — that
+would couple it to the host system, break determinism, and violate the
+core/frontend split (see ADR-002 and CLAUDE.md). Instead, the frontend
+installs a callable:
+
+```cpp
+using WallClockFn = std::function<std::chrono::seconds()>;
+void GameBoy::set_wall_clock(WallClockFn fn);
+```
+
+The provider returns the current wall-clock time as seconds since the
+Unix epoch. The MBC3 implementation invokes it only when needed —
+specifically on an RTC latch (a write of `0x01` to the latch register at
+`0x6000-0x7FFF` after a preceding `0x00`). It does *not* call the
+provider on every RTC register read. The latched seconds-value is stored
+alongside the RTC's register state in the cartridge's save-state struct,
+so that across save/restore the RTC behaves as if it had been ticking
+the whole time.
+
+**The default provider returns `std::chrono::seconds{0}`** — RTC frozen
+at the Unix epoch. This is deliberate: it keeps every test deterministic
+without per-test setup. Production frontends opt in:
+
+```cpp
+gb.set_wall_clock([] {
+    return std::chrono::duration_cast<std::chrono::seconds>(
+        std::chrono::system_clock::now().time_since_epoch());
+});
+```
+
+For headless integration tests that need to exercise day-night cycles
+(Pokemon Gold/Silver/Crystal), the test harness can install a clock
+that advances by a fixed amount per frame, keeping the RTC's behaviour
+reproducible across CI runs and across machines.
+
+This is the *only* injection point. No other subsystem reads wall-clock
+time; if a future feature looks like it needs to, that's a sign it
+belongs in the frontend instead.
 
 ---
 
@@ -777,11 +841,14 @@ entropy used) and is leveraged by:
 - CI runs that produce identical results across machines
 - Future-you reproducing a bug exactly
 
-**One exception:** the MBC3 RTC chip (Real-Time Clock) advances in real
-wall-clock time. Games that use it (Pokemon Gold/Silver/Crystal day-night
-cycles, primarily) are therefore not fully deterministic across runs.
-For testing purposes the RTC supports being fed a fixed timestamp instead
-of `std::chrono::system_clock::now()`, which restores determinism in CI.
+**One exception:** the MBC3 RTC chip (Real-Time Clock). When the
+production wall-clock provider is installed, games that use the RTC
+(Pokemon Gold/Silver/Crystal day-night cycles, primarily) are not fully
+deterministic across runs. The default provider returns `0s`, which
+freezes the RTC and restores determinism; CI relies on this default,
+and tests that need controlled RTC advancement install a fake provider.
+See ["MBC3 RTC and wall-clock time"](#mbc3-rtc-and-wall-clock-time) for
+the full API.
 
 ---
 

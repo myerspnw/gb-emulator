@@ -20,8 +20,14 @@ Checks: >
   -modernize-use-trailing-return-type,
   -cppcoreguidelines-pro-type-union-access
 
-WarningsAsErrors: ''
-HeaderFilterRegex: 'src/.*'
+WarningsAsErrors: '*'
+# Match only this project's own headers — specifically anything under
+# src/core/ or src/frontend/. The previous 'src/.*' was a partial match
+# that also caught FetchContent paths like _deps/fmt-src/include/...
+# (clang-tidy uses regex_search, not regex_match). SYSTEM on the
+# dependency declarations currently masks this, but the tighter regex is
+# the correct guard.
+HeaderFilterRegex: 'src/(core|frontend)/'
 FormatStyle: file
 
 CheckOptions:

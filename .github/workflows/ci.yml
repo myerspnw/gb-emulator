@@ -29,25 +29,49 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Linux / gcc / debug
+          # Minimum supported gcc (per CONTRIBUTING.md). Guards against
+          # silently using features only available in newer gcc.
+          - name: Linux / gcc-13 (min) / debug
+            os: ubuntu-24.04
+            preset: debug
+            cc: gcc-13
+            cxx: g++-13
+
+          - name: Linux / gcc-14 / debug
             os: ubuntu-24.04
             preset: debug
             cc: gcc-14
             cxx: g++-14
 
-          - name: Linux / gcc / release
+          - name: Linux / gcc-14 / release
             os: ubuntu-24.04
             preset: release
             cc: gcc-14
             cxx: g++-14
 
-          - name: Linux / clang / debug
+          # Minimum supported clang (per CONTRIBUTING.md). Same purpose
+          # as the gcc-13 lane.
+          - name: Linux / clang-16 (min) / debug
+            os: ubuntu-24.04
+            preset: debug
+            cc: clang-16
+            cxx: clang++-16
+
+          - name: Linux / clang-18 / debug
             os: ubuntu-24.04
             preset: debug
             cc: clang-18
             cxx: clang++-18
 
-          - name: Linux / clang / asan + ubsan
+          # Release-clang catches optimizer-only warnings that the
+          # gcc-release lane doesn't surface.
+          - name: Linux / clang-18 / release
+            os: ubuntu-24.04
+            preset: release
+            cc: clang-18
+            cxx: clang++-18
+
+          - name: Linux / clang-18 / asan + ubsan
             os: ubuntu-24.04
             preset: asan
             cc: clang-18

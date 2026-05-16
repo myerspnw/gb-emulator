@@ -94,13 +94,11 @@ jobs:
 
       - name: Run clang-tidy
         # Compile with WERROR=OFF so the build succeeds cleanly regardless
-        # of warnings. clang-tidy then analyses the compiled output and
-        # treats its own diagnostics as errors via --warnings-as-errors.
+        # of warnings. clang-tidy then analyses the compiled output;
+        # WarningsAsErrors and HeaderFilterRegex are configured in
+        # .clang-tidy so local and CI invocations behave identically.
         # This separates "does it compile" (ci.yml) from "is it clean" (here).
         run: |
           git ls-files -z '*.cpp' \
             | xargs -0 --no-run-if-empty \
-                clang-tidy-18 \
-                  -p build/debug \
-                  --warnings-as-errors='*' \
-                  --header-filter='src/.*'
+                clang-tidy-18 -p build/debug

@@ -39,8 +39,13 @@ sudo apt install -y \
 
 ```bash
 xcode-select --install
-brew install cmake ninja ccache llvm
+brew install cmake ninja ccache
 ```
+
+`clang-format` and `clang-tidy` aren't required locally — lint runs in
+CI on Linux. If you want them on macOS for editor integration or
+pre-push checks, `brew install llvm` provides newer versions than Apple
+Clang ships with; prepend `$(brew --prefix llvm)/bin` to your `PATH`.
 
 ### Configure and build
 

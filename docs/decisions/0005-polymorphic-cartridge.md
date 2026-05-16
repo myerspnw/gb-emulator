@@ -55,13 +55,12 @@ make_cartridge(std::vector<std::byte> rom);
 
 **`std::variant<NoMbc, Mbc1, Mbc3, Mbc5>`.** The Bus holds the variant
 by value; reads dispatch via `std::visit`. Pros: no heap allocation, no
-vtable, modern idiom. Cons: every cartridge access becomes a `std::visit`
-call, which is a switch on the variant's index plus inlined work. The
-Bus does this on every CPU memory access — millions of times per second.
-The cost is real but small. The bigger downside: the variant declaration
-hardcodes the set of supported MBCs. Adding HuC1 or MBC2 later requires
-changing every site that has the variant in its type. Polymorphism
-absorbs this with a new subclass.
+vtable, modern idiom. The decisive downside is extensibility: the
+variant declaration hardcodes the set of supported MBCs. Adding HuC1 or
+MBC2 later requires changing every site that names the variant in its
+type — and that includes anything `gbe_core` exposes publicly. A new
+subclass under polymorphism is a local change; a new variant alternative
+is a project-wide one.
 
 **Templates / CRTP.** Bus is templated on the Cartridge type. Zero
 virtual call overhead, full inlining. But: Bus is templated, so its

@@ -19,4 +19,4 @@ BinPackParameters: false
 BreakBeforeBraces: Attach
 SpaceAfterTemplateKeyword: false
 Cpp11BracedListStyle: true
-Standard: c++20
+Standard: Latest
