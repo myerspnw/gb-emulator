@@ -94,17 +94,29 @@ jobs:
 
       - name: Install macOS dependencies
         if: runner.os == 'macOS'
-        # Skip `brew update` — the runner image's Homebrew is recent enough
-        # for our needs, and `brew update` adds 30-60s for no real benefit.
-        run: brew install cmake ninja ccache
+        # cmake and ninja are pre-installed on macos-latest runners.
+        # Only ccache needs installing.
+        run: brew install ccache
 
-      - name: Set up ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+      - name: Configure ccache
+        # Set up ccache environment. CMakeLists.txt auto-detects ccache via
+        # find_program and sets CMAKE_CXX_COMPILER_LAUNCHER, so no extra
+        # CMake flags are needed here.
+        shell: bash
+        run: |
+          echo "CCACHE_DIR=${{ github.workspace }}/.ccache" >> "$GITHUB_ENV"
+          echo "CCACHE_MAXSIZE=500M"                        >> "$GITHUB_ENV"
+          echo "CCACHE_COMPRESS=1"                          >> "$GITHUB_ENV"
+
+      - name: Restore ccache
+        uses: actions/cache@v5
         with:
-          # One cache per matrix entry. Using preset and compiler
-          # ensures we don't poison the cache across configurations.
-          key: ${{ matrix.os }}-${{ matrix.cc }}-${{ matrix.preset }}
-          max-size: 500M
+          path: ${{ github.workspace }}/.ccache
+          # One cache per matrix entry. Compiler + preset ensures we don't
+          # share across configurations with different flags or build types.
+          key: ccache-${{ matrix.os }}-${{ matrix.cc }}-${{ matrix.preset }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ matrix.os }}-${{ matrix.cc }}-${{ matrix.preset }}-
 
       - name: Cache FetchContent downloads
         uses: actions/cache@v5
@@ -145,12 +157,12 @@ jobs:
 
       - name: ccache stats
         # Always run, even if tests failed, so we can see cache effectiveness.
-        # Wrapped to avoid masking earlier failures when ccache itself isn't
-        # available (e.g. an earlier brew install step failed on macOS).
+        # Safe to run unconditionally — ccache is pre-installed on Linux runners
+        # and installed via brew on macOS. Falls back gracefully if missing.
         if: always()
         run: |
           if command -v ccache >/dev/null 2>&1; then
-            ccache --show-stats
+            ccache --show-stats --verbose
           else
-            echo "ccache not installed; skipping stats"
+            echo "ccache not available; skipping stats"
           fi
