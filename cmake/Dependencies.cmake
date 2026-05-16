@@ -1,10 +1,10 @@
 include(FetchContent)
 
 # Pin versions for reproducibility. Bump deliberately.
-set(GBE_SDL_TAG       "release-3.2.20")
-set(GBE_FMT_TAG       "11.1.4")
-set(GBE_SPDLOG_TAG    "v1.15.1")
-set(GBE_GTEST_TAG     "v1.16.0")
+set(GBE_SDL_TAG       "release-3.4.8")
+set(GBE_FMT_TAG       "12.1.0")
+set(GBE_SPDLOG_TAG    "v1.17.0")
+set(GBE_GTEST_TAG     "v1.17.0")
 
 # ─── fmt ───────────────────────────────────────────────────────────────
 FetchContent_Declare(
