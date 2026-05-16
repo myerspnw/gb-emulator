@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  push:
+    # Run on every branch so WIP commits get CI feedback before opening a PR.
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Cancel in-progress runs on the same ref when a new commit is pushed.
+# Saves CI minutes; the older run's results would be stale anyway.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    # Upper bound on job duration. Our jobs typically run 3-8 minutes;
+    # 30 is comfortable headroom that still bounds a hung build.
+    timeout-minutes: 30
+    strategy:
+      # Don't cancel other jobs if one fails. We want to see all failures
+      # at once, not bisect by re-running.
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux / gcc / debug
+            os: ubuntu-24.04
+            preset: debug
+            cc: gcc-14
+            cxx: g++-14
+
+          - name: Linux / gcc / release
+            os: ubuntu-24.04
+            preset: release
+            cc: gcc-14
+            cxx: g++-14
+
+          - name: Linux / clang / debug
+            os: ubuntu-24.04
+            preset: debug
+            cc: clang-18
+            cxx: clang++-18
+
+          - name: Linux / clang / asan + ubsan
+            os: ubuntu-24.04
+            preset: asan
+            cc: clang-18
+            cxx: clang++-18
+
+          - name: macOS / Apple clang / debug
+            os: macos-latest
+            preset: debug
+            cc: clang
+            cxx: clang++
+
+          - name: macOS / Apple clang / release
+            os: macos-latest
+            preset: release
+            cc: clang
+            cxx: clang++
+
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+      # Share FetchContent downloads across CI runs via the cache below.
+      FETCHCONTENT_BASE_DIR: ${{ github.workspace }}/.fetchcontent-cache
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        # cmake, ninja, gcc, clang, lld, ccache are pre-installed on
+        # ubuntu-24.04 runners. We only need SDL3's transitive system
+        # dependencies (X11, Wayland, ALSA, etc.) for the FetchContent
+        # build of SDL3 to succeed.
+        # --no-install-recommends keeps the install footprint small and
+        # is the standard CI hygiene flag.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxinerama-dev libxss-dev libxkbcommon-dev libwayland-dev \
+            libdecor-0-dev libegl1-mesa-dev libgles2-mesa-dev \
+            libasound2-dev libpulse-dev libudev-dev libdbus-1-dev \
+            libibus-1.0-dev
+
+      - name: Install macOS dependencies
+        if: runner.os == 'macOS'
+        # Skip `brew update` — the runner image's Homebrew is recent enough
+        # for our needs, and `brew update` adds 30-60s for no real benefit.
+        run: brew install cmake ninja ccache
+
+      - name: Set up ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          # One cache per matrix entry. Using preset and compiler
+          # ensures we don't poison the cache across configurations.
+          key: ${{ matrix.os }}-${{ matrix.cc }}-${{ matrix.preset }}
+          max-size: 500M
+
+      - name: Cache FetchContent downloads
+        uses: actions/cache@v5
+        with:
+          path: ${{ github.workspace }}/.fetchcontent-cache
+          # Recreate cache when dependency versions change.
+          key: fetchcontent-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: |
+            fetchcontent-${{ runner.os }}-
+
+      - name: Verify compiler version
+        run: |
+          ${{ matrix.cxx }} --version
+          cmake --version
+          ninja --version
+
+      - name: Configure
+        # Pass critical options explicitly rather than relying on defaults.
+        # This guards against silent CI behavior changes if the option
+        # defaults in CMakeLists.txt are ever flipped.
+        run: |
+          cmake --preset ${{ matrix.preset }} \
+            -DGBE_BUILD_TESTS=ON \
+            -DGBE_ENABLE_WERROR=ON
+
+      - name: Build
+        run: cmake --build --preset ${{ matrix.preset }}
+
+      - name: Test
+        # Use --test-dir rather than --preset so we don't depend on every
+        # build preset having a matching test preset defined.
+        run: ctest --test-dir build/${{ matrix.preset }} --output-on-failure
+        env:
+          # Make sanitizer reports include stack traces and abort
+          # on first error, so CI logs are clear and unambiguous.
+          ASAN_OPTIONS: detect_leaks=1:abort_on_error=1:halt_on_error=1:detect_stack_use_after_return=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1:abort_on_error=1
+
+      - name: ccache stats
+        # Always run, even if tests failed, so we can see cache effectiveness.
+        # Wrapped to avoid masking earlier failures when ccache itself isn't
+        # available (e.g. an earlier brew install step failed on macOS).
+        if: always()
+        run: |
+          if command -v ccache >/dev/null 2>&1; then
+            ccache --show-stats
+          else
+            echo "ccache not installed; skipping stats"
+          fi
