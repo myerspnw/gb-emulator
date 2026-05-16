@@ -10,10 +10,10 @@ public:
     GameBoy();
     ~GameBoy() = default;
 
-    GameBoy(const GameBoy&)            = delete;
+    GameBoy(const GameBoy&) = delete;
     GameBoy& operator=(const GameBoy&) = delete;
-    GameBoy(GameBoy&&)                 = default;
-    GameBoy& operator=(GameBoy&&)      = default;
+    GameBoy(GameBoy&&) = default;
+    GameBoy& operator=(GameBoy&&) = default;
 
     void step();
 
