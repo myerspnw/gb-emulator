@@ -1,0 +1,106 @@
+name: Lint
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# Cancel in-progress runs on the same ref when a new commit is pushed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─── clang-format ────────────────────────────────────────────────────
+  # Checks that every .cpp and .hpp file matches the project's .clang-format
+  # config. Does not modify files — fails if any file would change.
+  clang-format:
+    name: clang-format
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Run clang-format
+        run: |
+          # clang-format-18 is pre-installed on ubuntu-24.04 runners.
+          # --dry-run: don't write changes
+          # --Werror: exit non-zero if any file would be changed
+          # --verbose: print the name of each file being checked
+          # -z / -0: null-delimited to handle filenames with spaces
+          git ls-files -z '*.cpp' '*.hpp' \
+            | xargs -0 --no-run-if-empty \
+                clang-format-18 --dry-run --Werror --verbose
+
+  # ─── clang-tidy ──────────────────────────────────────────────────────
+  # Runs static analysis against the debug build's compile_commands.json.
+  # Uses clang as the compiler so clang-tidy and the compiler agree on
+  # diagnostics.
+  clang-tidy:
+    name: clang-tidy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    env:
+      CC: clang-18
+      CXX: clang++-18
+      FETCHCONTENT_BASE_DIR: ${{ github.workspace }}/.fetchcontent-cache
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxi-dev \
+            libxinerama-dev libxss-dev libxtst-dev libxkbcommon-dev libwayland-dev \
+            libdecor-0-dev libegl1-mesa-dev libgles2-mesa-dev \
+            libasound2-dev libpulse-dev libudev-dev libdbus-1-dev \
+            libibus-1.0-dev
+
+      - name: Cache FetchContent downloads
+        uses: actions/cache@v5
+        with:
+          path: ${{ github.workspace }}/.fetchcontent-cache
+          # Same key as ci.yml's Linux jobs — shares the SDL3 download cache.
+          key: fetchcontent-${{ runner.os }}-${{ hashFiles('cmake/Dependencies.cmake') }}
+          restore-keys: |
+            fetchcontent-${{ runner.os }}-
+
+      - name: Configure
+        # Debug build so compile_commands.json includes all flags.
+        # -DCMAKE_EXPORT_COMPILE_COMMANDS=ON is already set by the base
+        # preset, but we make it explicit here for clarity.
+        # Werror is OFF for clang-tidy's configure pass — we want a clean
+        # build to analyse; tidy is the thing that should report issues.
+        run: |
+          cmake --preset debug \
+            -DGBE_BUILD_TESTS=ON \
+            -DGBE_ENABLE_WERROR=OFF \
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build
+        # Build first so generated headers (if any) exist before tidy runs.
+        # Also confirms the code actually compiles before we analyse it.
+        run: cmake --build --preset debug
+
+      - name: Run clang-tidy
+        # Compile with WERROR=OFF so the build succeeds cleanly regardless
+        # of warnings. clang-tidy then analyses the compiled output and
+        # treats its own diagnostics as errors via --warnings-as-errors.
+        # This separates "does it compile" (ci.yml) from "is it clean" (here).
+        run: |
+          git ls-files -z '*.cpp' \
+            | xargs -0 --no-run-if-empty \
+                clang-tidy-18 \
+                  -p build/debug \
+                  --warnings-as-errors='*' \
+                  --header-filter='src/.*'
