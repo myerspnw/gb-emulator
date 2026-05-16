@@ -40,3 +40,7 @@ coverage/
 roms/*
 !roms/test/
 !roms/README.md
+
+# Personal Claude Code notes (project CLAUDE.md is committed)
+CLAUDE.local.md
+.claude/
