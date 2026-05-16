@@ -1,5 +1,9 @@
 # gb-emulator
 
+[![CI](https://github.com/myerspnw/gb-emulator/actions/workflows/ci.yml/badge.svg)](https://github.com/myerspnw/gb-emulator/actions/workflows/ci.yml)
+[![Lint](https://github.com/myerspnw/gb-emulator/actions/workflows/lint.yml/badge.svg)](https://github.com/myerspnw/gb-emulator/actions/workflows/lint.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 A cycle-accurate Game Boy (DMG) emulator written in modern C++23.
 
 ## Status
