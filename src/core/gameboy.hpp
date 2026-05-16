@@ -8,9 +8,13 @@ namespace gbe {
 class GameBoy {
 public:
     GameBoy();
-    ~GameBoy();
+    ~GameBoy() = default;
 
-    // Stepping API will live here.
+    GameBoy(const GameBoy&)            = delete;
+    GameBoy& operator=(const GameBoy&) = delete;
+    GameBoy(GameBoy&&)                 = default;
+    GameBoy& operator=(GameBoy&&)      = default;
+
     void step();
 
 private:

@@ -3,7 +3,6 @@
 namespace gbe {
 
 GameBoy::GameBoy() = default;
-GameBoy::~GameBoy() = default;
 
 void GameBoy::step() {
     ++cycles_;

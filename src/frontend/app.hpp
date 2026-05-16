@@ -4,7 +4,7 @@ namespace gbe {
 
 class App {
 public:
-    int run();
+    static int run();
 };
 
 }  // namespace gbe
