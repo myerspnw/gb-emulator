@@ -1,0 +1,42 @@
+# Build directories
+build/
+build-*/
+out/
+cmake-build-*/
+
+# CMake artifacts
+CMakeCache.txt
+CMakeFiles/
+CMakeUserPresets.json
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+
+# IDE / editor
+.vscode/
+.idea/
+.cache/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Compiled objects / binaries
+*.o
+*.a
+*.so
+*.dylib
+*.exe
+
+# Coverage
+*.gcda
+*.gcno
+coverage/
+
+# ccache (in case it ends up in tree)
+.ccache/
+
+# Test ROMs (do not commit copyrighted material)
+roms/*
+!roms/test/
+!roms/README.md
