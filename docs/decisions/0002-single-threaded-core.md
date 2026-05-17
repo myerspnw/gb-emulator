@@ -84,7 +84,10 @@ That's the v2 plan if we keep the architecture.
   144 Hz monitor the emulator runs faster than real-time. v2 concern.
 
 **Future:** If v2 audio quality genuinely requires the emulator to run
-on its own thread, the boundary is already clean: `GameBoy` is a value
-type that holds its own state, with no global state. Putting it on a
-separate thread requires adding synchronization at its public API but
-no internal restructuring.
+on its own thread, the boundary is already clean: `GameBoy` is a
+self-contained object with no global state. It is non-copyable and
+non-movable (subsystems hold back-references to the Bus, so the
+instance's address must be stable for its lifetime), but a
+`std::unique_ptr<GameBoy>` is trivially moved between threads. Putting
+it on a separate thread requires adding synchronization at its public
+API but no internal restructuring.

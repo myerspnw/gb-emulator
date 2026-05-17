@@ -11,6 +11,7 @@ target_link_libraries(gbe_frontend
         gbe_core
         SDL3::SDL3-static
     PRIVATE
+        spdlog::spdlog
         gbe_warnings
         gbe_sanitizers
 )

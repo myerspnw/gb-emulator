@@ -166,9 +166,13 @@ The codebase is split into three layers:
 └──────────────────────────────────────────────────────────┘
 ```
 
-The dependency direction is enforced by the build system: `gbe_core` does
-not link against SDL3 and cannot include SDL headers. Any attempt to
-introduce I/O dependencies into the core will fail to compile.
+The dependency direction is enforced by the build system: `gbe_core`
+does not link against SDL3 or any logging library, and a CTest-driven
+boundary check (`cmake/CheckCoreBoundary.cmake`) scans `src/core/` on
+every test run and fails if it finds a `#include` reaching into the
+frontend, SDL3, or spdlog. Any attempt to introduce I/O dependencies
+into the core fails the test suite rather than silently working
+because the offending header happens to be header-only today.
 
 This separation enables several properties:
 
@@ -192,11 +196,15 @@ public:
     GameBoy();
     ~GameBoy();
 
-    // Move-only. Holding internal references means copying is unsafe.
-    GameBoy(const GameBoy&) = delete;
+    // Non-copyable, non-movable. Peripherals hold a back-reference to
+    // the Bus (for raising interrupts); moving the GameBoy would
+    // relocate the Bus subobject and dangle every peripheral's
+    // reference. Wrap in std::unique_ptr<GameBoy> if the frontend
+    // needs to relocate or store-by-value.
+    GameBoy(const GameBoy&)            = delete;
     GameBoy& operator=(const GameBoy&) = delete;
-    GameBoy(GameBoy&&) = default;
-    GameBoy& operator=(GameBoy&&) = default;
+    GameBoy(GameBoy&&)                 = delete;
+    GameBoy& operator=(GameBoy&&)      = delete;
 
     // ── Lifecycle ─────────────────────────────────────────
     // Takes ownership of the ROM bytes. The caller (typically the frontend
@@ -213,7 +221,7 @@ public:
     // Default provider returns 0s (RTC frozen at the Unix epoch), which
     // is deterministic and right for tests. May be called before or
     // after load_cartridge; takes effect on the next RTC latch.
-    using WallClockFn = std::function<std::chrono::seconds()>;
+    using WallClockFn = std::move_only_function<std::chrono::seconds() const>;
     void set_wall_clock(WallClockFn fn);
 
     // ── Execution ─────────────────────────────────────────
@@ -287,6 +295,14 @@ The core consists of these components:
   writes and returns silence. In v2: 4 channels (2 pulse, 1 wave, 1 noise).
 - **`Timer`** — DIV and TIMA registers. Generates timer interrupts.
 - **`Joypad`** — P1 register. Maps `Button` state into the hardware register.
+- **`Serial`** — SB (`0xFF01`) and SC (`0xFF02`) registers. v1 implements
+  the minimum needed for Blargg's test ROMs to communicate "Passed" /
+  "Failed" results: writes to SB store the byte, and writing `0x81` to
+  SC (start transfer, internal clock) instantly completes the transfer,
+  clears SC bit 7, and appends the byte to an internal buffer the
+  headless test harness reads. No real link-cable emulation; the serial
+  interrupt is not raised in v1. A future v2 link-cable feature has a
+  clean home here.
 - **`Cartridge`** — Polymorphic. Concrete subclasses for each MBC type.
   Owns ROM data and optional cart RAM.
 
@@ -317,7 +333,7 @@ never reference each other.
               └─┬───┬───┬───┬───┬───┬───┘
                 │   │   │   │   │   │
                 ▼   ▼   ▼   ▼   ▼   ▼   (dispatch into peripherals)
-              PPU APU Timer Joy Cart
+              PPU APU Timer Joy Serial Cart
                 │   │   │   │
                 └───┴───┴───┴────► request_interrupt() back to Bus
 ```
@@ -358,7 +374,7 @@ Memory map (DMG):
 | `0xE000-0xFDFF` | Echo RAM        | Bus (mirrors WRAM `0xC000-0xDDFF`) |
 | `0xFE00-0xFE9F` | OAM             | PPU                    |
 | `0xFEA0-0xFEFF` | Unusable        | Bus (returns 0xFF)     |
-| `0xFF00-0xFF7F` | I/O registers   | Joypad/Timer/APU/PPU   |
+| `0xFF00-0xFF7F` | I/O registers   | Joypad/Timer/Serial/APU/PPU |
 | `0xFF80-0xFFFE` | HRAM            | Bus                    |
 | `0xFFFF`        | IE register     | Bus                    |
 
@@ -542,13 +558,55 @@ Five interrupts:
 | 0   | VBlank      | PPU         | 0x0040  |
 | 1   | LCD STAT    | PPU         | 0x0048  |
 | 2   | Timer       | Timer       | 0x0050  |
-| 3   | Serial      | (Unused v1) | 0x0058  |
+| 3   | Serial      | Serial (not raised in v1) | 0x0058 |
 | 4   | Joypad      | Joypad      | 0x0060  |
 
 The Bus owns the IE (`0xFFFF`) and IF (`0xFF0F`) registers. Peripherals
 raise interrupts via `bus_.request_interrupt(...)`, which sets the
-appropriate bit in IF. The CPU checks `IF & IE` each instruction and,
-if interrupts are enabled (IME flag), jumps to the appropriate vector.
+appropriate bit in IF synchronously (no per-tick batching). The CPU
+checks `IF & IE` each instruction and, if interrupts are enabled (IME
+flag), jumps to the appropriate vector.
+
+### DMG quirks we model
+
+The Game Boy is a small machine with a handful of well-known hardware
+quirks that v1 must implement correctly to pass the test ROM suite and
+to run commercial games. We call them out explicitly so a reviewer can
+confirm we know about them.
+
+**OAM DMA (`0xFF46`).** Writing a byte `X` to `0xFF46` triggers a
+160-byte copy from `0xXX00-0xXX9F` into OAM (`0xFE00-0xFE9F`). The
+transfer takes 160 M-cycles (640 T-cycles). During the transfer, the
+CPU can only access HRAM (`0xFF80-0xFFFE`) and the IE register —
+reads from any other region return `0xFF`. This is implemented in the
+Bus: a `dma_active_cycles_` counter is decremented per tick, and the
+Bus's read dispatch checks it before returning a value. Games like
+Pokémon and Zelda trigger OAM DMA every frame.
+
+**HALT bug.** If `HALT` is executed with IME=0 *and* `IF & IE != 0`,
+the CPU does not actually halt — instead the program counter fails to
+increment on the next fetch, causing the byte at PC+1 to be executed
+twice. This is well-documented and Blargg's `cpu_instrs.gb` exercises
+it. We model it directly in the `HALT` opcode handler.
+
+**STOP.** The DMG `STOP` instruction (`0x10 0x00`) is a low-power mode
+that suspends the CPU until a joypad button is pressed. No commercial
+DMG game uses it in a way that matters. We model it as a pair of NOPs
+that consume the appropriate cycles; a future v2 may model the
+low-power state if it ever becomes relevant.
+
+**Joypad interrupt edge-triggering.** The joypad interrupt fires on
+the *transition* from "no selected button pressed" to "any selected
+button pressed", where "selected" is gated by which row (direction or
+action keys) the CPU currently has wired via P1 bits 4-5. It is not
+level-triggered: holding a button down does not continuously raise the
+interrupt. Several games (notably Tetris) rely on this for responsive
+input handling.
+
+**PPU memory blocking.** During Mode 2 (OAM scan), OAM is inaccessible
+to the CPU and reads return `0xFF`. During Mode 3 (drawing), both VRAM
+and OAM are inaccessible. The Bus checks the current PPU mode on
+VRAM/OAM accesses. This is one of the things `dmg-acid2` validates.
 
 ### Input
 
@@ -595,6 +653,24 @@ return is communication: the operation can't complete and the caller
 needs to decide what to do.
 
 See ADR-004 for the full rationale.
+
+**No logging from the core.** The core does not link a logging library
+and does not write to stdout, stderr, or any sink. This is a deliberate
+consequence of the "no I/O" boundary: anything the core wants to
+communicate to the user (errors, warnings, diagnostics) becomes either
+an `std::expected` error returned to the caller or a piece of state
+the frontend can observe via the const introspection accessors. The
+frontend uses `spdlog` to format and emit log records; the core uses
+`fmt` only for in-process string formatting (e.g., assembling error
+messages that flow back to the frontend).
+
+If a future feature needs streaming diagnostics from the core (an
+opcode trace, an unimplemented-MBC warning), the right shape is an
+injected sink (`std::move_only_function<void(LogLevel,
+std::string_view)>`) installed by the frontend at construction time —
+not a direct dependency on a logging library. This keeps the core's
+"no I/O" invariant a literal property of its dependency graph rather
+than a convention.
 
 ### Save states
 
@@ -669,9 +745,19 @@ core/frontend split (see ADR-002 and CLAUDE.md). Instead, the frontend
 installs a callable:
 
 ```cpp
-using WallClockFn = std::function<std::chrono::seconds()>;
+using WallClockFn = std::move_only_function<std::chrono::seconds() const>;
 void GameBoy::set_wall_clock(WallClockFn fn);
 ```
+
+`std::move_only_function` (C++23) is used in preference to
+`std::function` for two reasons. First, the stored callable does not
+need to be copyable — `set_wall_clock` moves it in, the RTC moves it
+into its slot, nothing copies it afterwards — so the copyability
+constraint of `std::function` would force unnecessary requirements on
+every captured type. Second, the `const`-qualified call operator
+documents that invoking the provider must not mutate its captured
+state, which makes the API contract checkable at the type level rather
+than just by convention.
 
 The provider returns the current wall-clock time as seconds since the
 Unix epoch. The MBC3 implementation invokes it only when needed —
@@ -866,10 +952,15 @@ Key properties relevant here:
 - Multi-platform: builds on Linux and macOS in CI
 
 The dependency direction between libraries (`gbe_frontend` depends on
-`gbe_core`, but not vice versa) is enforced by the build system through
-the `target_link_libraries` graph. `gbe_core` does not list SDL3 as a
-dependency; any attempt to `#include <SDL3/...>` from core code fails to
-compile.
+`gbe_core`, but not vice versa) is enforced two ways. First, the
+`target_link_libraries` graph: `gbe_core` does not list SDL3, spdlog,
+or `gbe_frontend` as dependencies, so the offending headers are not on
+its include path. Second, the `core_boundary` CTest test invokes
+`cmake/CheckCoreBoundary.cmake` to scan `src/core/` for any `#include`
+that reaches into the frontend, SDL3, or spdlog — catching the case
+where someone adds a string-only header to `frontend/` that *would*
+compile if pulled into the core. The architecture invariant is checked,
+not merely conventional.
 
 ---
 
