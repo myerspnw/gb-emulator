@@ -12,13 +12,13 @@ class App {
 public:
     static int run();
 
-    App(const App&)            = delete;
+    App(const App&) = delete;
     App& operator=(const App&) = delete;
-    App(App&&)                 = delete;
-    App& operator=(App&&)      = delete;
+    App(App&&) = delete;
+    App& operator=(App&&) = delete;
 
 private:
-    App()  = default;
+    App() = default;
     ~App() = default;
 
     [[nodiscard]] bool init();

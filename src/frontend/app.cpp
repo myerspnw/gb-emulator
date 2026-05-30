@@ -1,10 +1,10 @@
 #include "app.hpp"
 
-#include <array>
-#include <cstdint>
-
 #include <SDL3/SDL.h>
 #include <spdlog/spdlog.h>
+
+#include <array>
+#include <cstdint>
 
 namespace gbe {
 
@@ -40,12 +40,11 @@ int App::main_loop() {
     // works end-to-end. Replaced by gameboy.framebuffer() once the PPU
     // lands.
     std::array<std::uint8_t, Window::pixel_count> framebuffer{};
-    constexpr auto width  = static_cast<std::size_t>(Window::gb_width);
+    constexpr auto width = static_cast<std::size_t>(Window::gb_width);
     constexpr auto height = static_cast<std::size_t>(Window::gb_height);
     for (std::size_t y = 0; y < height; ++y) {
         for (std::size_t x = 0; x < width; ++x) {
-            framebuffer[(y * width) + x] =
-                static_cast<std::uint8_t>((x * 4U) / width);
+            framebuffer[(y * width) + x] = static_cast<std::uint8_t>((x * 4U) / width);
         }
     }
 

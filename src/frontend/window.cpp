@@ -1,12 +1,12 @@
 #include "window.hpp"
 
+#include <SDL3/SDL.h>
+#include <spdlog/spdlog.h>
+
 #include <array>
 #include <cassert>
 #include <cstdint>
 #include <span>
-
-#include <SDL3/SDL.h>
-#include <spdlog/spdlog.h>
 
 namespace gbe {
 
@@ -23,8 +23,7 @@ constexpr std::array<std::uint32_t, 4> dmg_palette = {
     0xFF081820U,
 };
 
-constexpr int pitch_bytes =
-    Window::gb_width * static_cast<int>(sizeof(std::uint32_t));
+constexpr int pitch_bytes = Window::gb_width * static_cast<int>(sizeof(std::uint32_t));
 
 }  // namespace
 
@@ -43,11 +42,10 @@ Window::~Window() {
 }
 
 bool Window::init() {
-    window_ = SDL_CreateWindow(
-        "Game Boy Emulator",
-        gb_width * initial_scale,
-        gb_height * initial_scale,
-        SDL_WINDOW_RESIZABLE);
+    window_ = SDL_CreateWindow("Game Boy Emulator",
+                               gb_width * initial_scale,
+                               gb_height * initial_scale,
+                               SDL_WINDOW_RESIZABLE);
     if (window_ == nullptr) {
         spdlog::error("SDL_CreateWindow failed: {}", SDL_GetError());
         return false;
@@ -63,26 +61,20 @@ bool Window::init() {
     // Without VSync the loop still renders correctly, but frame pacing
     // falls back to "as fast as events drain" until the PPU paces us.
     if (!SDL_SetRenderVSync(renderer_, 1)) {
-        spdlog::warn("SDL_SetRenderVSync failed (continuing without vsync): {}",
-                     SDL_GetError());
+        spdlog::warn("SDL_SetRenderVSync failed (continuing without vsync): {}", SDL_GetError());
     }
 
     // Renderer scales 160x144 logical pixels to the window with integer
     // scaling + letterboxing/pillarboxing, preserving the DMG aspect
     // ratio at any window size.
     if (!SDL_SetRenderLogicalPresentation(
-            renderer_, gb_width, gb_height,
-            SDL_LOGICAL_PRESENTATION_INTEGER_SCALE)) {
-        spdlog::error("SDL_SetRenderLogicalPresentation failed: {}",
-                      SDL_GetError());
+            renderer_, gb_width, gb_height, SDL_LOGICAL_PRESENTATION_INTEGER_SCALE)) {
+        spdlog::error("SDL_SetRenderLogicalPresentation failed: {}", SDL_GetError());
         return false;
     }
 
     texture_ = SDL_CreateTexture(
-        renderer_,
-        SDL_PIXELFORMAT_ARGB8888,
-        SDL_TEXTUREACCESS_STREAMING,
-        gb_width, gb_height);
+        renderer_, SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING, gb_width, gb_height);
     if (texture_ == nullptr) {
         spdlog::error("SDL_CreateTexture failed: {}", SDL_GetError());
         return false;
@@ -94,8 +86,10 @@ bool Window::init() {
     }
 
     spdlog::info("Window opened: {}x{} (logical {}x{}, integer-scaled)",
-                 gb_width * initial_scale, gb_height * initial_scale,
-                 gb_width, gb_height);
+                 gb_width * initial_scale,
+                 gb_height * initial_scale,
+                 gb_width,
+                 gb_height);
     return true;
 }
 

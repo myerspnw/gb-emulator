@@ -17,18 +17,18 @@ namespace gbe {
 // "rendering" — the core stores indices, not colors.
 class Window {
 public:
-    static constexpr int gb_width      = 160;
-    static constexpr int gb_height     = 144;
+    static constexpr int gb_width = 160;
+    static constexpr int gb_height = 144;
     static constexpr int initial_scale = 4;
     static constexpr std::size_t pixel_count =
         static_cast<std::size_t>(gb_width) * static_cast<std::size_t>(gb_height);
 
     Window();
     ~Window();
-    Window(const Window&)            = delete;
+    Window(const Window&) = delete;
     Window& operator=(const Window&) = delete;
-    Window(Window&&)                 = delete;
-    Window& operator=(Window&&)      = delete;
+    Window(Window&&) = delete;
+    Window& operator=(Window&&) = delete;
 
     // Creates the window, renderer, and streaming texture. Logs and
     // returns false on the first SDL call that fails; the destructor
@@ -40,9 +40,9 @@ public:
     void present(std::span<const std::uint8_t> framebuffer);
 
 private:
-    SDL_Window*   window_   = nullptr;
+    SDL_Window* window_ = nullptr;
     SDL_Renderer* renderer_ = nullptr;
-    SDL_Texture*  texture_  = nullptr;
+    SDL_Texture* texture_ = nullptr;
 
     // Palette-index -> ARGB scratch buffer. Member rather than local
     // to avoid 90 KiB of stack churn per present() call.
