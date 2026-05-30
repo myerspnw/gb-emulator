@@ -1,0 +1,9 @@
+# Point clangd at the debug build's compile_commands.json.
+#
+# CMake writes one per build dir (debug/, asan/, release/, ...). The debug
+# preset is the canonical dev configuration per CONTRIBUTING.md, so we
+# pin to it here. Override by creating a personal ~/.config/clangd/config.yaml
+# or by symlinking a different build's compile_commands.json into the repo
+# root — clangd prefers a repo-root compile_commands.json over this file.
+CompileFlags:
+  CompilationDatabase: build/debug
