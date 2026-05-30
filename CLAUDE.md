@@ -29,8 +29,12 @@ documented in the ADRs' "Alternatives considered" sections.
 
 **Phase:** v1 — "the core works"
 
-**Active work:** Initial project setup is complete. The build system,
-CI, and documentation are in place. Implementation has not yet started.
+**Active work:** Foundation is in place. The build system, CI,
+documentation, and the SDL3 frontend skeleton — window, renderer with
+integer-scaled logical presentation, streaming texture, event loop —
+all build and run clean under debug and asan. The frontend currently
+renders a placeholder DMG-palette test pattern; emulation has not yet
+started.
 
 **Next milestone:** Cartridge loader. The first real code will be the
 ROM header parser, the no-MBC implementation, and the factory function

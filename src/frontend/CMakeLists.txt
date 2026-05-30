@@ -2,6 +2,7 @@
 
 add_library(gbe_frontend STATIC
     app.cpp
+    window.cpp
 )
 
 target_include_directories(gbe_frontend PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/..)
