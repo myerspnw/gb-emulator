@@ -87,6 +87,68 @@ export FETCHCONTENT_BASE_DIR=$HOME/.cache/cmake-fetchcontent
 
 ---
 
+## Editor setup
+
+The repo is set up for [`clangd`](https://clangd.llvm.org/) as the
+language server. clangd reads `compile_commands.json` to learn the
+project's include paths, the C++ standard, and the warning flags —
+without it, `<span>`, `<SDL3/SDL.h>`, and similar headers appear as
+errors even though the build is fine.
+
+### One-time setup
+
+1. Configure the `debug` preset at least once so CMake writes the
+   compile database:
+
+   ```bash
+   cmake --preset debug
+   ```
+
+   CMake generates `build/debug/compile_commands.json`. A checked-in
+   `.clangd` file at the repo root points clangd at it, so this is
+   the only manual step required.
+
+2. Install the clangd integration for your editor:
+
+   - **VS Code**: the official [`clangd`](https://marketplace.visualstudio.com/items?itemName=llvm-vs-code-extensions.vscode-clangd)
+     extension. If Microsoft's C/C++ extension is also installed,
+     disable its IntelliSense (`"C_Cpp.intelliSenseEngine": "disabled"`)
+     so the two don't fight.
+   - **Neovim / Vim**: any LSP plugin that supports clangd
+     (`nvim-lspconfig`, `coc.nvim`, `vim-lsp`).
+   - **CLion / Qt Creator / Xcode**: the built-in language tooling
+     reads `compile_commands.json` directly; no clangd extension
+     needed.
+
+   You may need to install `clangd` itself separately. macOS:
+   `brew install llvm` (then prepend `$(brew --prefix llvm)/bin` to
+   `PATH`). Linux: `apt install clangd` or the LLVM apt repo.
+
+### After changing build flags or adding files
+
+If you add a source file, change `CMakeLists.txt`, or modify warning
+flags, re-run `cmake --preset debug` so `compile_commands.json` picks
+up the change, then restart clangd from your editor (VS Code:
+*clangd: Restart language server* from the Command Palette).
+
+### Using a different preset
+
+`.clangd` pins to `build/debug` because that's the canonical dev
+configuration. To work primarily under a different preset (e.g.
+`asan`), either edit `.clangd` locally or create a personal
+`~/.config/clangd/config.yaml` with a different
+`CompileFlags.CompilationDatabase`. clangd also prefers a
+`compile_commands.json` symlink at the repo root over the `.clangd`
+file, if you'd rather symlink:
+
+```bash
+ln -sf build/asan/compile_commands.json compile_commands.json
+```
+
+The symlink is gitignored.
+
+---
+
 ## Code style
 
 Code style is enforced by `.clang-format` and `.clang-tidy`. CI rejects PRs
