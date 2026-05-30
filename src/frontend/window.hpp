@@ -4,9 +4,13 @@
 #include <cstdint>
 #include <span>
 
+// SDL3 C-API opaque types. Forward-declared to keep <SDL3/SDL.h> out
+// of this public header; the names follow SDL's conventions, not ours.
+// NOLINTBEGIN(readability-identifier-naming)
 struct SDL_Window;
 struct SDL_Renderer;
 struct SDL_Texture;
+// NOLINTEND(readability-identifier-naming)
 
 namespace gbe {
 
